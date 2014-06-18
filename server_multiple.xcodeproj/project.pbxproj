@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1B9AE9A31951235C00F0691B /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B9AE9A21951235C00F0691B /* main.cpp */; };
+		1B9AE9A31951235C00F0691B /* server_multiple.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B9AE9A21951235C00F0691B /* server_multiple.cpp */; };
 		1B9AE9A51951235C00F0691B /* server_multiple.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = 1B9AE9A41951235C00F0691B /* server_multiple.1 */; };
 /* End PBXBuildFile section */
 
@@ -26,7 +26,7 @@
 
 /* Begin PBXFileReference section */
 		1B9AE99F1951235C00F0691B /* server_multiple */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = server_multiple; sourceTree = BUILT_PRODUCTS_DIR; };
-		1B9AE9A21951235C00F0691B /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+		1B9AE9A21951235C00F0691B /* server_multiple.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = server_multiple.cpp; sourceTree = "<group>"; };
 		1B9AE9A41951235C00F0691B /* server_multiple.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = server_multiple.1; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -60,7 +60,7 @@
 		1B9AE9A11951235C00F0691B /* server_multiple */ = {
 			isa = PBXGroup;
 			children = (
-				1B9AE9A21951235C00F0691B /* main.cpp */,
+				1B9AE9A21951235C00F0691B /* server_multiple.cpp */,
 				1B9AE9A41951235C00F0691B /* server_multiple.1 */,
 			);
 			path = server_multiple;
@@ -117,7 +117,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1B9AE9A31951235C00F0691B /* main.cpp in Sources */,
+				1B9AE9A31951235C00F0691B /* server_multiple.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
