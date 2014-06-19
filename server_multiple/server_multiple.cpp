@@ -65,10 +65,14 @@ void *handle_a_connection(void *socket_desc)
         // Revice string
         receive_size = recv(sock, client_message, string_length, 0);
         if (receive_size == string_length) {
-            struct timeval now;
-            gettimeofday(&now, NULL);
-            printf("%s - %ld.%d\n", client_message, now.tv_sec, now.tv_usec);
+//            struct timeval now;
+//            gettimeofday(&now, NULL);
+//            printf("%s - %ld.%d\n", client_message, now.tv_sec, now.tv_usec);
+            printf("%s\n", client_message);
             process_to_title_case(client_message);
+            // Send string length
+            send(sock, &network_byte_order, sizeof(uint32_t), 0);
+            // Send string
             if(send(sock, client_message, receive_size, 0) == -1) {
                 printf("Send failed\n");
             }
