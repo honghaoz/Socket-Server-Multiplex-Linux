@@ -1,3 +1,11 @@
+//
+//  Server.cpp
+//  Server_select() method
+//
+//  Created by Zhang Honghao on 6/17/14.
+//  CS 454(654) A2
+//
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,8 +18,8 @@
 #include <pthread.h>
 #include <netinet/in.h>
 #include <netdb.h>
-//#include <ifaddrs.h>
 #include <ctype.h>
+#include <fcntl.h>
 
 #define MAX_NUMBER_OF_CLIENTS 5
 
@@ -21,7 +29,7 @@
 char* process_to_title_case(char *string) {
     char *temp = string;
     while (*temp != '\0') {
-        //Ignore the white space before next word
+        // Ignore white spaces before next word
         while (isspace(*temp) && (*temp != '\0')) {
             temp++;
         }
@@ -41,62 +49,219 @@ char* process_to_title_case(char *string) {
     return string;
 }
 
-/**
- * Thread function, handle a connection for each client
- */
-void *handle_a_connection(void *socket_desc)
+int sock; // Listening socket
+int clients[MAX_NUMBER_OF_CLIENTS]; // Array of connected clients
+fd_set socks; // Socket file descriptors that we want to wake up for
+int highest_socket; // Highest # of socket file descriptor
+
+void setnonblocking(int sock)
 {
+	int opts;
+    
+	opts = fcntl(sock,F_GETFL);
+	if (opts < 0) {
+		perror("fcntl(F_GETFL)");
+		exit(EXIT_FAILURE);
+	}
+	opts = (opts | O_NONBLOCK);
+	if (fcntl(sock,F_SETFL,opts) < 0) {
+		perror("fcntl(F_SETFL)");
+		exit(EXIT_FAILURE);
+	}
+	return;
+}
+
+/**
+ *  Keep socks contain the current alive socks
+ */
+void build_select_list() {
+	// Clears out the fd_set called socks
+	FD_ZERO(&socks);
+	
+    // Adds listening sock to socks
+	FD_SET(sock, &socks);
+	
+    // Add the cennected clients' socks to socks
+    for (int i = 0; i < MAX_NUMBER_OF_CLIENTS; i++) {
+        if (clients[i] != 0) {
+            FD_SET(clients[i], &socks);
+            if (clients[i] > highest_socket) {
+                highest_socket = clients[i];
+            }
+        }
+    }
+}
+
+/**
+ *  Handle a new connection from clients
+ */
+void handle_new_connection() {
+//    printf("new connection\n");
+    int new_client_sock;
+    struct sockaddr_in client;
+    int addr_size = sizeof(struct sockaddr_in);
+    // Try to accept a new connection
+    new_client_sock = accept(sock, (struct sockaddr *)&client, (socklen_t *)&addr_size);
+    if (new_client_sock < 0) {
+        perror("Accept failed");
+		 exit(-1);
+    }
+//	setnonblocking(new_client_sock);
+    // Add this new client to clients
+    for (int i = 0; (i < MAX_NUMBER_OF_CLIENTS) && (i != -1); i++) {
+        if (clients[i] == 0) {
+            printf("\nConnection accepted: FD=%d; Slot=%d\n", new_client_sock, i);
+            clients[i] = new_client_sock;
+            new_client_sock = -1;
+            break;
+        }
+    }
+    if (new_client_sock != -1) {
+        perror("No room left for new client.\n");
+        close(new_client_sock);
+    }
+}
+
+/**
+ *  Handle the data come from client with client number
+ *
+ *  @param client_number Client index in clients
+ */
+void deal_with_data(int client_number) {
+//    printf("data\n");
     //Get the socket descriptor
-    int sock = (int)((long)socket_desc);
-    ssize_t receive_size;
+    int client_sock = clients[client_number];
+    long receive_size;
     
     // Prepare for string length
     uint32_t network_byte_order;
     uint32_t string_length;
     
     //Receive a message from client
-    while((receive_size = recv(sock, &network_byte_order, sizeof(uint32_t), 0)) > 0){
+    receive_size = recv(client_sock, &network_byte_order, sizeof(uint32_t), 0);
+    
+    // Receive successfully
+    if (receive_size > 0){
+//        printf("Receive successfully\n");
         // Receive size must be same as sizeof(uint32_t) = 4
         if (receive_size != sizeof(uint32_t)) {
-//            printf("string length error\n");
+            printf("string length error\n");
         }
+        printf("    *receive_size:%lu -   ", receive_size);
         // Get string length
         string_length = ntohl(network_byte_order);
         
         // Prepare memeory for string body
         char *client_message = (char *)malloc(sizeof(char) * string_length);
         // Revice string
-        receive_size = recv(sock, client_message, string_length, 0);
+        receive_size = recv(client_sock, client_message, string_length, 0);
+        
+        printf("stringlength:%u - received_size: %zd\n", string_length, receive_size);
         if (receive_size == string_length) {
-//            struct timeval now;
-//            gettimeofday(&now, NULL);
-//            printf("%s - %ld.%d\n", client_message, now.tv_sec, now.tv_usec);
+            //            struct timeval now;
+            //            gettimeofday(&now, NULL);
+            //            printf("%s - %ld.%d\n", client_message, now.tv_sec, now.tv_usec);
             printf("%s\n", client_message);
             process_to_title_case(client_message);
             // Send string length
-            send(sock, &network_byte_order, sizeof(uint32_t), 0);
+            send(client_sock, &network_byte_order, sizeof(uint32_t), 0);
             // Send string
-            if(send(sock, client_message, receive_size, 0) == -1) {
-//                printf("Send failed\n");
+            if(send(client_sock, client_message, receive_size, 0) == -1) {
+                //                printf("Send failed\n");
             }
         } else {
-//            printf("string length error\n");
+            printf("string error: ");
+            printf("%s\n", client_message);
         }
         free(client_message);
     }
-    
-    if(receive_size == 0) {
-//        printf("Client disconnected\n");
-        fflush(stdout);
+    else if (receive_size < 0) {
+        perror("Receive failed");
     }
-    else if(receive_size == -1) {
-        perror("recv failed");
+    else {
+        printf("\nConnection lost: FD=%d;  Slot=%d\n", client_sock, client_number);
+        close(client_sock);
+        
+        // Set this place to be available
+        clients[client_number] = 0;
     }
-    pthread_exit(socket_desc);
 }
+
+/**
+ *  Read socks that has changed
+ */
+void read_socks() {
+//    printf("read\n");
+    // If listening sock is woked up, there is a new client come in
+    if (FD_ISSET(sock, &socks)) {
+        handle_new_connection();
+    }
+    
+    // Check whether there is new data come in
+    for (int i = 0; i < MAX_NUMBER_OF_CLIENTS; i++) {
+        if (FD_ISSET(clients[i], &socks)) {
+            deal_with_data(i);
+        }
+    }
+}
+//
+///**
+// * Thread function, handle a connection for each client
+// */
+//void *handle_a_connection(void *socket_desc)
+//{
+//    //Get the socket descriptor
+//    int sock = (int)((long)socket_desc);
+//    ssize_t receive_size;
+//    
+//    // Prepare for string length
+//    uint32_t network_byte_order;
+//    uint32_t string_length;
+//    
+//    //Receive a message from client
+//    while((receive_size = recv(sock, &network_byte_order, sizeof(uint32_t), 0)) > 0){
+//        // Receive size must be same as sizeof(uint32_t) = 4
+//        if (receive_size != sizeof(uint32_t)) {
+////            printf("string length error\n");
+//        }
+//        // Get string length
+//        string_length = ntohl(network_byte_order);
+//        
+//        // Prepare memeory for string body
+//        char *client_message = (char *)malloc(sizeof(char) * string_length);
+//        // Revice string
+//        receive_size = recv(sock, client_message, string_length, 0);
+//        if (receive_size == string_length) {
+////            struct timeval now;
+////            gettimeofday(&now, NULL);
+////            printf("%s - %ld.%d\n", client_message, now.tv_sec, now.tv_usec);
+//            printf("%s\n", client_message);
+//            process_to_title_case(client_message);
+//            // Send string length
+//            send(sock, &network_byte_order, sizeof(uint32_t), 0);
+//            // Send string
+//            if(send(sock, client_message, receive_size, 0) == -1) {
+////                printf("Send failed\n");
+//            }
+//        } else {
+////            printf("string length error\n");
+//        }
+//        free(client_message);
+//    }
+//    
+//    if(receive_size == 0) {
+////        printf("Client disconnected\n");
+//        fflush(stdout);
+//    }
+//    else if(receive_size == -1) {
+//        perror("recv failed");
+//    }
+//    pthread_exit(socket_desc);
+//}
 
 int main(int argc , char *argv[])
 {
+    // Get IP (v4) address for this host
     struct addrinfo hints, *res, *p;
     int status;
     char ipstr[INET6_ADDRSTRLEN];
@@ -125,70 +290,69 @@ int main(int argc , char *argv[])
     }
     freeaddrinfo(res); // free the linked list
     
-    int socket_desc, client_sock, new_client_sock, addr_size;
+    int addr_size;
+//    struct timeval timeout;  /* Timeout for select */
+    int readsocks;	     /* Number of sockets ready for reading */
     
     //Create socket
-    socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_desc == -1) {
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock == -1) {
 //        printf("Could not create socket\n");
     }
 //    printf("Socket created\n");
     
+    //So that we can re-bind to it without TIME_WAIT problems
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &addr_size, sizeof(addr_size));
+//    setnonblocking(sock);
+    
     //Prepare the sockaddr_in structure
-    struct sockaddr_in server, client;
+    struct sockaddr_in server;
     memset(&server, 0, sizeof(struct sockaddr_in));
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = htonl(INADDR_ANY);
-    server.sin_port = htons(0);
+    server.sin_port = htons( 15000 );//htons(0);
     
     //Bind
-    if(bind(socket_desc, (struct sockaddr *)&server, sizeof(struct sockaddr_in)) == -1) {
-        perror("Bind failed\n");
+    if(bind(sock, (struct sockaddr *)&server, sizeof(struct sockaddr_in)) == -1) {
+        perror("Bind failed");
         exit(-1);
     }
 //    printf("Bind done\n");
 
     //Listen, up to 5 clients
-    listen(socket_desc , MAX_NUMBER_OF_CLIENTS);
+    listen(sock , MAX_NUMBER_OF_CLIENTS);
 
-//    struct sockaddr_in localAddress;
+    // Print out port number
     socklen_t addressLength = sizeof(server);
-    if (getsockname(socket_desc, (struct sockaddr*)&server, &addressLength) == -1) {
+    if (getsockname(sock, (struct sockaddr*)&server, &addressLength) == -1) {
         perror("Get port error");
         exit(-1);
     }
     printf("SERVER_PORT %d\n", ntohs(server.sin_port));
     
-    //Accept and incoming connection
-//    printf("Waiting for incoming connections...\n");
+    // Since there is only one sock, this is the highest
+    highest_socket = sock;
+    // Clear the clients
+    memset((char *) &clients, 0, sizeof(clients));
     
-    pthread_attr_t thread_attr;
-    pthread_attr_init(&thread_attr);
-    
-    addr_size = sizeof(struct sockaddr_in);
-    while((client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t *)&addr_size))) {
-//        printf("Connection accepted\n");
-        
-        pthread_t thread_for_client;
-        pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
-        new_client_sock = client_sock;
-        
-        if(pthread_create(&thread_for_client, &thread_attr, handle_a_connection, (void*)((long)new_client_sock))) {
-            perror("Could not create thread");
+    // Server loop
+    while (1) {
+        build_select_list();
+//        timeout.tv_sec = 1;
+//        timeout.tv_usec = 0;
+        readsocks = select(highest_socket + 1, &socks, NULL, NULL, NULL);
+        if (readsocks < 0) {
+            perror("Select error");
             exit(-1);
         }
-//        pthread_join(thread_for_client, NULL);
-//        printf("Handler assigned\n");
+        if (readsocks == 0) {
+//            printf(".");
+//            fflush(stdout);
+        } else {
+            read_socks();
+        }
     }
     
-    pthread_attr_destroy(&thread_attr);
-    
-    if (client_sock < 0)
-    {
-        perror("Accept failed");
-        exit(-1);
-    }
-    
-    close(socket_desc);
+    close(sock);
     return 0;
 }

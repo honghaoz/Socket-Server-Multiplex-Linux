@@ -227,6 +227,7 @@
 				1B9AE9AA1951235C00F0691B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
