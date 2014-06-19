@@ -46,22 +46,19 @@ void *handle_a_connection(void *socket_desc)
     //Get the socket descriptor
     int sock = (int)((long)socket_desc);
     ssize_t receive_size;
+    
     char client_message_buffer[MAX_BUFFER_SIZE];
     char *client_message;
     
     //Receive a message from client
     while((receive_size = recv(sock, client_message_buffer, MAX_BUFFER_SIZE, 0)) > 0){
-//        printf("%zd\n", receive_size);
         //Send the message back to client
         client_message = (char *)malloc(sizeof(char) * receive_size);
         memcpy(client_message, client_message_buffer, sizeof(char) * receive_size);
         struct timeval now;
         gettimeofday(&now, NULL);
         printf("%s - %ld.%d\n", client_message, now.tv_sec, now.tv_usec);
-//        printf("%zu:%s\n", strlen(client_message), client_message);
         process_to_title_case(client_message);
-//        printf("%zu:%s\n", strlen(client_message), client_message);
-//        printf("%d: %s - \n",strlen(client_message),client_message);
         if(send(sock, client_message, receive_size, 0) == -1) {
             printf("Send failed\n");
         }
