@@ -11,6 +11,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 //#include <ifaddrs.h>
+#include <ctype.h>
 
 #define MAX_NUMBER_OF_CLIENTS 5
 
@@ -20,23 +21,22 @@
 char* process_to_title_case(char *string) {
     char *temp = string;
     while (*temp != '\0') {
+        //Ignore the white space before next word
+        while (isspace(*temp) && (*temp != '\0')) {
+            temp++;
+        }
         // Capitalizing
         if ('a' <= *temp && *temp <= 'z') {
             *temp = *temp - 'a' + 'A';
         }
         temp++;
         // Move to next word, and process to lower-case
-        while ((*temp != ' ') && (*temp != '\0')) {
+        while (!isspace(*temp) && (*temp != '\0')) {
             if ('A' <= *temp && *temp <= 'Z') {
                 *temp = *temp - 'A' + 'a';
             }
             temp++;
         }
-        // Either *temp == ' ' or '\0'
-        if (*temp == '\0') {
-            break;
-        }
-        temp++;
     }
     return string;
 }
@@ -58,7 +58,7 @@ void *handle_a_connection(void *socket_desc)
     while((receive_size = recv(sock, &network_byte_order, sizeof(uint32_t), 0)) > 0){
         // Receive size must be same as sizeof(uint32_t) = 4
         if (receive_size != sizeof(uint32_t)) {
-            printf("string length error\n");
+//            printf("string length error\n");
         }
         // Get string length
         string_length = ntohl(network_byte_order);
@@ -77,16 +77,16 @@ void *handle_a_connection(void *socket_desc)
             send(sock, &network_byte_order, sizeof(uint32_t), 0);
             // Send string
             if(send(sock, client_message, receive_size, 0) == -1) {
-                printf("Send failed\n");
+//                printf("Send failed\n");
             }
         } else {
-            printf("string length error\n");
+//            printf("string length error\n");
         }
         free(client_message);
     }
     
     if(receive_size == 0) {
-        printf("Client disconnected\n");
+//        printf("Client disconnected\n");
         fflush(stdout);
     }
     else if(receive_size == -1) {
@@ -102,35 +102,26 @@ int main(int argc , char *argv[])
     char ipstr[INET6_ADDRSTRLEN];
     
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC; // AF_INET or AF_INET6 to force version
+    hints.ai_family = AF_INET; // AF_INET or AF_INET6 to force version
     hints.ai_socktype = SOCK_STREAM;
     
     char hostname[128];
-    gethostname(hostname, sizeof hostname);
-    
+    gethostname(hostname, sizeof(hostname));
     if ((status = getaddrinfo(hostname, NULL, &hints, &res)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
         return 2;
     }
     
-    for(p = res;p != NULL; p = p->ai_next) {
+    for(p = res; p != NULL; p = p->ai_next) {
         void *addr;
-//        char *ipver;
-        // get the pointer to the address itself,
-        // different fields in IPv4 and IPv6:
         if (p->ai_family == AF_INET) { // IPv4
             struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
             addr = &(ipv4->sin_addr);
-//            ipver = "IPv4";
-        } else { // IPv6
-            struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)p->ai_addr;
-            addr = &(ipv6->sin6_addr);
-//            ipver = "IPv6";
+            // convert the IP to a string and print it:
+            inet_ntop(p->ai_family, addr, ipstr, sizeof ipstr);
+            printf("SERVER_ADDRESS %s\n", ipstr);
+            break;
         }
-        
-        // convert the IP to a string and print it:
-        inet_ntop(p->ai_family, addr, ipstr, sizeof ipstr);
-        printf("SERVER_ADDRESS %s\n", ipstr);
     }
     freeaddrinfo(res); // free the linked list
     
@@ -162,26 +153,21 @@ int main(int argc , char *argv[])
 
 //    struct sockaddr_in localAddress;
     socklen_t addressLength = sizeof(server);
-    getsockname(socket_desc, (struct sockaddr*)&server, &addressLength);
-    
+    if (getsockname(socket_desc, (struct sockaddr*)&server, &addressLength) == -1) {
+        perror("Get port error");
+        exit(-1);
+    }
     printf("SERVER_PORT %d\n", ntohs(server.sin_port));
-//    int len = sizeof(struct sockaddr);
-//    if(getsockname(socket_desc, (struct sockaddr *)&server, &len) == -1){
-//        perror("getsockname");
-//    } else{
-//        printf("SERVER_PORT %d\n", ntohl(server.sin_port));
-//    }
-    
     
     //Accept and incoming connection
-    printf("Waiting for incoming connections...\n");
+//    printf("Waiting for incoming connections...\n");
     
     pthread_attr_t thread_attr;
     pthread_attr_init(&thread_attr);
     
     addr_size = sizeof(struct sockaddr_in);
     while((client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t *)&addr_size))) {
-        printf("Connection accepted\n");
+//        printf("Connection accepted\n");
         
         pthread_t thread_for_client;
         pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
@@ -191,10 +177,8 @@ int main(int argc , char *argv[])
             perror("Could not create thread");
             exit(-1);
         }
-        
-        //Now join the thread , so that we dont terminate before the thread
 //        pthread_join(thread_for_client, NULL);
-        printf("Handler assigned\n");
+//        printf("Handler assigned\n");
     }
     
     pthread_attr_destroy(&thread_attr);
@@ -205,5 +189,6 @@ int main(int argc , char *argv[])
         exit(-1);
     }
     
+    close(socket_desc);
     return 0;
 }
