@@ -54,23 +54,6 @@ int clients[MAX_NUMBER_OF_CLIENTS]; // Array of connected clients
 fd_set socks; // Socket file descriptors that we want to wake up for
 int highest_socket; // Highest # of socket file descriptor
 
-void setnonblocking(int sock)
-{
-	int opts;
-    
-	opts = fcntl(sock,F_GETFL);
-	if (opts < 0) {
-		perror("fcntl(F_GETFL)");
-		exit(EXIT_FAILURE);
-	}
-	opts = (opts | O_NONBLOCK);
-	if (fcntl(sock,F_SETFL,opts) < 0) {
-		perror("fcntl(F_SETFL)");
-		exit(EXIT_FAILURE);
-	}
-	return;
-}
-
 /**
  *  Keep socks contain the current alive socks
  */
@@ -96,21 +79,20 @@ void build_select_list() {
  *  Handle a new connection from clients
  */
 void handle_new_connection() {
-//    printf("new connection\n");
     int new_client_sock;
     struct sockaddr_in client;
     int addr_size = sizeof(struct sockaddr_in);
+    
     // Try to accept a new connection
     new_client_sock = accept(sock, (struct sockaddr *)&client, (socklen_t *)&addr_size);
     if (new_client_sock < 0) {
         perror("Accept failed");
 		 exit(-1);
     }
-//	setnonblocking(new_client_sock);
     // Add this new client to clients
     for (int i = 0; (i < MAX_NUMBER_OF_CLIENTS) && (i != -1); i++) {
         if (clients[i] == 0) {
-            printf("\nConnection accepted: FD=%d; Slot=%d\n", new_client_sock, i);
+//            printf("\nConnection accepted: FD=%d; Slot=%d\n", new_client_sock, i);
             clients[i] = new_client_sock;
             new_client_sock = -1;
             break;
@@ -128,8 +110,7 @@ void handle_new_connection() {
  *  @param client_number Client index in clients
  */
 void deal_with_data(int client_number) {
-//    printf("data\n");
-    //Get the socket descriptor
+    // Get the socket descriptor
     int client_sock = clients[client_number];
     long receive_size;
     
@@ -137,17 +118,16 @@ void deal_with_data(int client_number) {
     uint32_t network_byte_order;
     uint32_t string_length;
     
-    //Receive a message from client
+    // Receive a message from client
     receive_size = recv(client_sock, &network_byte_order, sizeof(uint32_t), 0);
     
     // Receive successfully
     if (receive_size > 0){
-//        printf("Receive successfully\n");
         // Receive size must be same as sizeof(uint32_t) = 4
         if (receive_size != sizeof(uint32_t)) {
             printf("string length error\n");
         }
-        printf("    *receive_size:%lu -   ", receive_size);
+//        printf("    *receive_size:%lu -   ", receive_size);
         // Get string length
         string_length = ntohl(network_byte_order);
         
@@ -156,7 +136,7 @@ void deal_with_data(int client_number) {
         // Revice string
         receive_size = recv(client_sock, client_message, string_length, 0);
         
-        printf("stringlength:%u - received_size: %zd\n", string_length, receive_size);
+//        printf("stringlength:%u - received_size: %zd\n", string_length, receive_size);
         if (receive_size == string_length) {
             //            struct timeval now;
             //            gettimeofday(&now, NULL);
@@ -171,7 +151,6 @@ void deal_with_data(int client_number) {
             }
         } else {
             printf("string error: ");
-            printf("%s\n", client_message);
         }
         free(client_message);
     }
@@ -179,7 +158,7 @@ void deal_with_data(int client_number) {
         perror("Receive failed");
     }
     else {
-        printf("\nConnection lost: FD=%d;  Slot=%d\n", client_sock, client_number);
+//        printf("\nConnection lost: FD=%d;  Slot=%d\n", client_sock, client_number);
         close(client_sock);
         
         // Set this place to be available
@@ -204,60 +183,6 @@ void read_socks() {
         }
     }
 }
-//
-///**
-// * Thread function, handle a connection for each client
-// */
-//void *handle_a_connection(void *socket_desc)
-//{
-//    //Get the socket descriptor
-//    int sock = (int)((long)socket_desc);
-//    ssize_t receive_size;
-//    
-//    // Prepare for string length
-//    uint32_t network_byte_order;
-//    uint32_t string_length;
-//    
-//    //Receive a message from client
-//    while((receive_size = recv(sock, &network_byte_order, sizeof(uint32_t), 0)) > 0){
-//        // Receive size must be same as sizeof(uint32_t) = 4
-//        if (receive_size != sizeof(uint32_t)) {
-////            printf("string length error\n");
-//        }
-//        // Get string length
-//        string_length = ntohl(network_byte_order);
-//        
-//        // Prepare memeory for string body
-//        char *client_message = (char *)malloc(sizeof(char) * string_length);
-//        // Revice string
-//        receive_size = recv(sock, client_message, string_length, 0);
-//        if (receive_size == string_length) {
-////            struct timeval now;
-////            gettimeofday(&now, NULL);
-////            printf("%s - %ld.%d\n", client_message, now.tv_sec, now.tv_usec);
-//            printf("%s\n", client_message);
-//            process_to_title_case(client_message);
-//            // Send string length
-//            send(sock, &network_byte_order, sizeof(uint32_t), 0);
-//            // Send string
-//            if(send(sock, client_message, receive_size, 0) == -1) {
-////                printf("Send failed\n");
-//            }
-//        } else {
-////            printf("string length error\n");
-//        }
-//        free(client_message);
-//    }
-//    
-//    if(receive_size == 0) {
-////        printf("Client disconnected\n");
-//        fflush(stdout);
-//    }
-//    else if(receive_size == -1) {
-//        perror("recv failed");
-//    }
-//    pthread_exit(socket_desc);
-//}
 
 int main(int argc , char *argv[])
 {
@@ -282,35 +207,33 @@ int main(int argc , char *argv[])
         if (p->ai_family == AF_INET) { // IPv4
             struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
             addr = &(ipv4->sin_addr);
-            // convert the IP to a string and print it:
+            // Convert the IP to a string and print it:
             inet_ntop(p->ai_family, addr, ipstr, sizeof ipstr);
             printf("SERVER_ADDRESS %s\n", ipstr);
             break;
         }
     }
-    freeaddrinfo(res); // free the linked list
+    freeaddrinfo(res); // Free the linked list
     
     int addr_size;
-//    struct timeval timeout;  /* Timeout for select */
-    int readsocks;	     /* Number of sockets ready for reading */
+    int readsocks; // Number of sockets ready for reading
     
-    //Create socket
+    // Create socket
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock == -1) {
 //        printf("Could not create socket\n");
     }
 //    printf("Socket created\n");
     
-    //So that we can re-bind to it without TIME_WAIT problems
+    // So that we can re-bind to it without TIME_WAIT problems
     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &addr_size, sizeof(addr_size));
-//    setnonblocking(sock);
     
     //Prepare the sockaddr_in structure
     struct sockaddr_in server;
     memset(&server, 0, sizeof(struct sockaddr_in));
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = htonl(INADDR_ANY);
-    server.sin_port = htons( 15000 );//htons(0);
+    server.sin_port = htons(0);
     
     //Bind
     if(bind(sock, (struct sockaddr *)&server, sizeof(struct sockaddr_in)) == -1) {
