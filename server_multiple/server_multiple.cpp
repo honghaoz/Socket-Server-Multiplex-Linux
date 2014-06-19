@@ -7,9 +7,9 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <assert.h>
 
 #define MAX_NUMBER_OF_CLIENTS 5
-#define MAX_BUFFER_SIZE 2000
 
 /**
  *  Process a string to Title Case
@@ -47,23 +47,35 @@ void *handle_a_connection(void *socket_desc)
     int sock = (int)((long)socket_desc);
     ssize_t receive_size;
     
-    char client_message_buffer[MAX_BUFFER_SIZE];
-    char *client_message;
+    // Prepare for string length
+    uint32_t network_byte_order;
+    uint32_t string_length;
     
     //Receive a message from client
-    while((receive_size = recv(sock, client_message_buffer, MAX_BUFFER_SIZE, 0)) > 0){
-        //Send the message back to client
-        client_message = (char *)malloc(sizeof(char) * receive_size);
-        memcpy(client_message, client_message_buffer, sizeof(char) * receive_size);
-        struct timeval now;
-        gettimeofday(&now, NULL);
-        printf("%s - %ld.%d\n", client_message, now.tv_sec, now.tv_usec);
-        process_to_title_case(client_message);
-        if(send(sock, client_message, receive_size, 0) == -1) {
-            printf("Send failed\n");
+    while((receive_size = recv(sock, &network_byte_order, sizeof(uint32_t), 0)) > 0){
+        // Receive size must be same as sizeof(uint32_t) = 4
+        if (receive_size != sizeof(uint32_t)) {
+            printf("string length error\n");
+        }
+        // Get string length
+        string_length = ntohl(network_byte_order);
+        
+        // Prepare memeory for string body
+        char *client_message = (char *)malloc(sizeof(char) * string_length);
+        // Revice string
+        receive_size = recv(sock, client_message, string_length, 0);
+        if (receive_size == string_length) {
+            struct timeval now;
+            gettimeofday(&now, NULL);
+            printf("%s - %ld.%d\n", client_message, now.tv_sec, now.tv_usec);
+            process_to_title_case(client_message);
+            if(send(sock, client_message, receive_size, 0) == -1) {
+                printf("Send failed\n");
+            }
+        } else {
+            printf("string length error\n");
         }
         free(client_message);
-        memset(client_message_buffer, 0, MAX_BUFFER_SIZE);
     }
     
     if(receive_size == 0) {
