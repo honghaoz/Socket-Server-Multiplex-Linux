@@ -5,9 +5,12 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <assert.h>
+#include <netinet/in.h>
+#include <netdb.h>
+//#include <ifaddrs.h>
 
 #define MAX_NUMBER_OF_CLIENTS 5
 
@@ -94,31 +97,82 @@ void *handle_a_connection(void *socket_desc)
 
 int main(int argc , char *argv[])
 {
+    struct addrinfo hints, *res, *p;
+    int status;
+    char ipstr[INET6_ADDRSTRLEN];
+    
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC; // AF_INET or AF_INET6 to force version
+    hints.ai_socktype = SOCK_STREAM;
+    
+    char hostname[128];
+    gethostname(hostname, sizeof hostname);
+    
+    if ((status = getaddrinfo(hostname, NULL, &hints, &res)) != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
+        return 2;
+    }
+    
+    for(p = res;p != NULL; p = p->ai_next) {
+        void *addr;
+//        char *ipver;
+        // get the pointer to the address itself,
+        // different fields in IPv4 and IPv6:
+        if (p->ai_family == AF_INET) { // IPv4
+            struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
+            addr = &(ipv4->sin_addr);
+//            ipver = "IPv4";
+        } else { // IPv6
+            struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)p->ai_addr;
+            addr = &(ipv6->sin6_addr);
+//            ipver = "IPv6";
+        }
+        
+        // convert the IP to a string and print it:
+        inet_ntop(p->ai_family, addr, ipstr, sizeof ipstr);
+        printf("SERVER_ADDRESS %s\n", ipstr);
+    }
+    freeaddrinfo(res); // free the linked list
+    
     int socket_desc, client_sock, new_client_sock, addr_size;
     
     //Create socket
     socket_desc = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_desc == -1) {
-        printf("Could not create socket\n");
+//        printf("Could not create socket\n");
     }
-    printf("Socket created\n");
-
+//    printf("Socket created\n");
+    
     //Prepare the sockaddr_in structure
     struct sockaddr_in server, client;
+    memset(&server, 0, sizeof(struct sockaddr_in));
     server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(8888);
+    server.sin_addr.s_addr = htonl(INADDR_ANY);
+    server.sin_port = htons(0);
     
     //Bind
     if(bind(socket_desc, (struct sockaddr *)&server, sizeof(struct sockaddr_in)) == -1) {
         perror("Bind failed\n");
         exit(-1);
     }
-    printf("Bind done\n");
+//    printf("Bind done\n");
 
     //Listen, up to 5 clients
     listen(socket_desc , MAX_NUMBER_OF_CLIENTS);
 
+//    struct sockaddr_in localAddress;
+    socklen_t addressLength = sizeof(server);
+    getsockname(socket_desc, (struct sockaddr*)&server, &addressLength);
+    
+    printf("SERVER_PORT %d\n", ntohs(server.sin_port));
+//    int len = sizeof(struct sockaddr);
+//    if(getsockname(socket_desc, (struct sockaddr *)&server, &len) == -1){
+//        perror("getsockname");
+//    } else{
+//        printf("SERVER_PORT %d\n", ntohl(server.sin_port));
+//    }
+    
+    
     //Accept and incoming connection
     printf("Waiting for incoming connections...\n");
     
