@@ -3,7 +3,6 @@
 //  Server_select() method
 //
 //  Created by Zhang Honghao on 6/17/14.
-//  CS 454(654) A2
 //
 
 #include <stdio.h>
